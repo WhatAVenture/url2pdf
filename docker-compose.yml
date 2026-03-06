@@ -21,8 +21,9 @@ services:
       - "3001:3001"
     command: >
       sh -c "apk add --no-cache ghostscript nodejs npm &&
-             npm install -g express multer &&
-             node /app/server.js"
+             cd /app &&
+             npm install express multer &&
+             node server.js"
     volumes:
       - ./gs-server.js:/app/server.js
     restart: unless-stopped
