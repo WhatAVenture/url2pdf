@@ -17,4 +17,4 @@ Run via `docker compose`, and ensure ports 3000 and 3001 ports are accessible.
 Usage
 -----
 
-Use browserless for the conversion (port 3000), and ghostscript for improving compatibility with browser's PDF viewers, which is not ensured with the browserless output.
+Use browserless for the conversion (port 3000), and the pdfclean service (port 3001) for structural PDF cleanup via qpdf, improving compatibility across browsers, LibreOffice, and Apple devices. Fonts are installed in the browserless container so Chrome embeds them directly.

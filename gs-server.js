@@ -8,47 +8,49 @@ const upload = multer({ dest: '/tmp/' });
 app.post('/flatten', upload.single('pdf'), (req, res) => {
     const input = req.file.path;
     const output = input + '_flat.pdf';
+
     try {
-        const result = spawnSync('gs', [
-            '-dBATCH',
-            '-dNOPAUSE',
-            '-sDEVICE=pdfwrite',
-            '-dCompatibilityLevel=1.4',
-            '-dPDFSETTINGS=/printer',
-            '-dEmbedAllFonts=true',
-            '-dSubsetFonts=true',
-            '-dCompressFonts=true',
-            '-dNOPLATFONTS',
-            '-dFastWebView=true',
-            '-dPassThroughJPEGImages=true',
-            '-dHaveTransparency=false',
-            '-dNOTRANSPARENCY=true',
-            '-dFlattenTransparency=true',
-            `-sOutputFile=${output}`,
-            '-c',
-            '[/Title (Document) /Author () /Subject () /Keywords () /Creator (Ghostscript) /Producer (Ghostscript) /CreationDate (D:20240101000000) /ModDate (D:20240101000000) /DOCINFO pdfmark [/MarkInfo << /Marked false >> /DOCINFO pdfmark',
-            '-f',
-            input
+        const cairoOutput = input + '_cairo.pdf';
+
+        const cairoResult = spawnSync('pdftocairo', [
+            '-pdf',
+            '-origpagesizes',
+            input,
+            cairoOutput
         ], { stdio: 'pipe' });
 
-        console.log('GS stdout:', result.stdout?.toString());
-        console.log('GS stderr:', result.stderr?.toString());
-        console.log('GS status:', result.status);
-        console.log('GS error:', result.error);
+        console.log('pdftocairo stderr:', cairoResult.stderr?.toString());
+        console.log('pdftocairo status:', cairoResult.status);
 
-        if (result.status !== 0 || result.error) {
-            throw new Error('Ghostscript error: ' + (result.stderr?.toString() || result.error?.message));
+        if (cairoResult.status !== 0) {
+            throw new Error('pdftocairo error: ' + cairoResult.stderr?.toString());
+        }
+
+        const qpdfResult = spawnSync('qpdf', [
+            '--linearize',
+            '--object-streams=disable',
+            '--normalize-content=n',
+            '--min-version=1.4',
+            cairoOutput,
+            output
+        ], { stdio: 'pipe' });
+
+        console.log('qpdf stderr:', qpdfResult.stderr?.toString());
+        console.log('qpdf status:', qpdfResult.status);
+
+        if (qpdfResult.status !== 0 && qpdfResult.status !== 3) {
+            throw new Error('qpdf error: ' + qpdfResult.stderr?.toString());
         }
 
         res.setHeader('Content-Type', 'application/pdf');
         fs.createReadStream(output).pipe(res).on('finish', () => {
-            fs.unlinkSync(input);
-            fs.unlinkSync(output);
+            [input, cairoOutput, output].forEach(f => { try { fs.unlinkSync(f); } catch (_) {} });
         });
     } catch (e) {
+        console.error(e);
+        [input, input + '_cairo.pdf', output].forEach(f => { try { fs.unlinkSync(f); } catch (_) {} });
         res.status(500).send(e.message);
     }
 });
 
-app.listen(3001, () => console.log('Ghostscript service on 3001'));
-
+app.listen(3001, () => console.log('PDF cleanup service on 3001'));
